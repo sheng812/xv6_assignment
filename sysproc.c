@@ -6,6 +6,7 @@
 #include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
+#include "pstat.h"
 
 int
 sys_fork(void)
@@ -88,4 +89,46 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+// This sets the time-slice of the specified pid to slice. 
+int
+sys_setslice(void)
+{
+  int pid;
+  int slice;
+
+  if(argint(0, &pid) < 0 || argint(1, &slice) < 0)
+    return -1;
+  return setslice(pid, slice);
+}
+
+int
+sys_getslice(void)
+{
+  int pid;
+
+  if(argint(0, &pid) < 0)
+    return -1;
+  
+  return getslice(pid);
+}
+
+int
+sys_fork2(void)
+{
+  int slice;
+
+  if(argint(0, &slice) < 0)
+    return -1;
+  return fork2(slice);
+}
+
+int
+sys_getpinfo(void)
+{
+  struct pstat *pst;
+  if(argptr(0, (void*)&pst, sizeof(*pst)) < 0)
+    return -1;
+  return getpinfo(pst);
 }

@@ -148,6 +148,7 @@ userinit(void)
   // because the assignment might not be atomic.
   acquire(&ptable.lock);
 
+  p->slice = 1;
   p->state = RUNNABLE;
 
   release(&ptable.lock);
@@ -180,45 +181,7 @@ growproc(int n)
 int
 fork(void)
 {
-  int i, pid;
-  struct proc *np;
-  struct proc *curproc = myproc();
-
-  // Allocate process.
-  if((np = allocproc()) == 0){
-    return -1;
-  }
-
-  // Copy process state from proc.
-  if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
-    kfree(np->kstack);
-    np->kstack = 0;
-    np->state = UNUSED;
-    return -1;
-  }
-  np->sz = curproc->sz;
-  np->parent = curproc;
-  *np->tf = *curproc->tf;
-
-  // Clear %eax so that fork returns 0 in the child.
-  np->tf->eax = 0;
-
-  for(i = 0; i < NOFILE; i++)
-    if(curproc->ofile[i])
-      np->ofile[i] = filedup(curproc->ofile[i]);
-  np->cwd = idup(curproc->cwd);
-
-  safestrcpy(np->name, curproc->name, sizeof(curproc->name));
-
-  pid = np->pid;
-
-  acquire(&ptable.lock);
-
-  np->state = RUNNABLE;
-
-  release(&ptable.lock);
-
-  return pid;
+  return fork2(myproc()->slice);
 }
 
 // Exit the current process.  Does not return.
@@ -495,6 +458,106 @@ kill(int pid)
   release(&ptable.lock);
   return -1;
 }
+
+int
+setslice(int pid, int slice)
+{
+  struct proc *p;
+
+  if(slice <=0){
+    return -1;
+  }
+
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid == pid){
+      int tmpslice = p->slice;
+      p->slice = slice;
+      // Wake process from sleep if necessary.
+      if(p->state == RUNNING && p->slice < tmpslice){
+        p->state = RUNNABLE;
+        sched();
+      }
+      release(&ptable.lock);
+      return 0;
+    }
+  }
+  release(&ptable.lock);
+  return -1;
+}
+
+int
+getslice(int pid)
+{
+  struct proc *p;
+
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid == pid){
+      release(&ptable.lock);
+      return p->slice;
+    }
+  }
+  release(&ptable.lock);
+  return -1;
+}
+
+int
+fork2(int slice)
+{
+  int i, pid;
+  struct proc *np;
+  struct proc *curproc = myproc();
+
+  // slice must be positive int
+  if(slice <= 0){
+    return -1;
+  }
+
+  // Allocate process.
+  if((np = allocproc()) == 0){
+    return -1;
+  }
+
+  // Copy process state from proc.
+  if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
+    kfree(np->kstack);
+    np->kstack = 0;
+    np->state = UNUSED;
+    return -1;
+  }
+  np->sz = curproc->sz;
+  np->parent = curproc;
+  *np->tf = *curproc->tf;
+  np->slice = slice;
+
+  // Clear %eax so that fork returns 0 in the child.
+  np->tf->eax = 0;
+
+  for(i = 0; i < NOFILE; i++)
+    if(curproc->ofile[i])
+      np->ofile[i] = filedup(curproc->ofile[i]);
+  np->cwd = idup(curproc->cwd);
+
+  safestrcpy(np->name, curproc->name, sizeof(curproc->name));
+
+  pid = np->pid;
+
+  acquire(&ptable.lock);
+
+  np->state = RUNNABLE;
+
+  release(&ptable.lock);
+
+  return pid;
+}
+
+int
+getpinfo(struct pstat *ps)
+{
+  return 0;
+}
+
 
 //PAGEBREAK: 36
 // Print a process listing to console.  For debugging.

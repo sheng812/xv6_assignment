@@ -2,8 +2,7 @@
 #include "stat.h"
 #include "user.h"
 #include "pstat.h"
-#include "defs.h"
-
+// #include "defs.h"
 int
 main(int argc, char **argv)
 {
@@ -18,7 +17,8 @@ main(int argc, char **argv)
     return -1;
   } else if (p_a == 0) {
     char* ara[] = {"look", 0};
-    *ara[1] = *argv[2];
+    strcpy(ara[1], argv[2]);
+    // *ara[1] = *argv[2];
     printf(1, "%d\n", getpid());
     setslice(getpid(), atoi(argv[1]));
     exec("loop", ara);
@@ -28,8 +28,8 @@ main(int argc, char **argv)
       return -2;
     } else if (p_b == 0) {
       char* arb[] = {"loop", 0};
-      safestrcpy(*arb[1])
-      *arb[1] = *argv[4];
+      strcpy(arb[1], argv[4]);
+      // *arb[1] = *argv[4];
       printf(1, "%d\n", getpid());
       setslice(getpid(), atoi(argv[3]));
       printf(1, "%s\n", *arb[1]);

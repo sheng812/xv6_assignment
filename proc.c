@@ -6,6 +6,63 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "pstat.h"
+
+struct list {
+  // struct proc* proc;
+  int size;
+  struct proc* prs[NPROC];
+}plist;
+
+struct Node* head;
+// struct Node* tail;
+// struct Node nodes[NPROC];
+
+void enqueue(struct proc* p){
+  plist.prs[plist.size] = p;
+  plist.size++;
+  return;
+}
+
+void dequeue(struct proc* p){
+  int i;
+  for (i = 0; i < NPROC; i++) {
+    if (plist.prs[i] == p) {
+      for (int j = i; j < NPROC - 1; j++) {
+        plist.prs[j] = plist.prs[j+1];
+      }
+      plist.prs[NPROC] = UNUSED;
+      plist.size--;
+      break;
+    }
+  }
+  // struct Node* temp = head;
+  // struct Node* prev = UNUSED;
+  // if (head == UNUSED){
+  //   return;
+  // }
+  // if (head == n) {
+  //   if (tail == head){
+  //     head = UNUSED;
+  //     tail = UNUSED;
+  //     return;
+  //   }
+  //   head = temp->next;
+  // }
+  // while (temp != UNUSED && temp != n) {
+  //   prev = temp;
+  //   temp = temp->next;
+  // }
+  // if (temp == UNUSED) {
+  //   return;
+  // }
+  // if (temp == tail) {
+  //   temp->next = UNUSED;
+  //   tail = prev;
+  // }
+  // prev->next = temp->next;
+}
+
 
 struct {
   struct spinlock lock;
@@ -75,6 +132,7 @@ allocproc(void)
 {
   struct proc *p;
   char *sp;
+  // struct Node *n;
 
   acquire(&ptable.lock);
 
@@ -111,6 +169,7 @@ found:
   p->context = (struct context*)sp;
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
+  enqueue(p);
 
   return p;
 }
@@ -149,6 +208,10 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->slice = 1;
+  p->compticks = 0;
+  p->schedticks = 0;
+  p->sleepticks = 0;
+  p->switches = 0;
   p->state = RUNNABLE;
 
   release(&ptable.lock);
@@ -193,6 +256,7 @@ exit(void)
   struct proc *curproc = myproc();
   struct proc *p;
   int fd;
+  // struct Node *n;
 
   if(curproc == initproc)
     panic("init exiting");
@@ -226,6 +290,8 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
+  dequeue(curproc);
+
   sched();
   panic("zombie exit");
 }
@@ -288,17 +354,21 @@ scheduler(void)
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
+  // struct Node *pl;
   
   for(;;){
     // Enable interrupts on this processor.
     sti();
-
+    // pl = head;
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
+    // for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    // used linked list plist
+    for (int i = 0; i < plist.size; i++) {
+      p = plist.prs[i];
+      if(p->state != RUNNABLE) {
         continue;
-
+      }
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -314,7 +384,6 @@ scheduler(void)
       c->proc = 0;
     }
     release(&ptable.lock);
-
   }
 }
 
@@ -530,6 +599,10 @@ fork2(int slice)
   np->parent = curproc;
   *np->tf = *curproc->tf;
   np->slice = slice;
+  np->compticks = 0;
+  np->schedticks = 0;
+  np->sleepticks = 0;
+  np->switches = 0;
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
@@ -555,6 +628,22 @@ fork2(int slice)
 int
 getpinfo(struct pstat *ps)
 {
+  int i;
+  acquire(&ptable.lock);
+  for(i = 0; i < NPROC; i++){
+    if (ptable.proc[i].state == UNUSED) {
+      ps->inuse[i] = 0;
+    } else {
+      ps->inuse[i] = 1;
+      ps->pid[i] = ptable.proc[i].pid;
+      ps->timeslice[i] = ptable.proc[i].slice;
+      ps->compticks[i] = ptable.proc[i].compticks;
+      ps->schedticks[i] = ptable.proc[i].schedticks;
+      ps->sleepticks[i] = ptable.proc[i].sleepticks;
+      ps->switches[i] = ptable.proc[i].switches;
+    }
+  }
+  release(&ptable.lock);
   return 0;
 }
 

@@ -51,7 +51,10 @@ struct proc {
   char name[16];               // Process name (debugging)
   uint sleepat;                // The process sleep at ticks = sleepat
   int slice;                   // Time-slice
-  int compensation;            // Time compensation
+  int compticks;               // Time compensation
+  int schedticks;              // total number of timer ticks this process has been scheduled
+  int sleepticks;              // number of ticks during which this process was blocked
+  int switches;                // total num times this process has been scheduled
 };
 
 // Process memory is laid out contiguously, low addresses first:

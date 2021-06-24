@@ -42,14 +42,13 @@ main(int argc, char **argv)
       int pid_b = wait();
       int compticksA;
       int compticksB;
-      struct pstat* ps = {0};
-      getpinfo(ps);
-      printf(1, "end");
+      struct pstat ps = {0};
+      getpinfo(&ps);
       for (int i = 0; i < NPROC; i++) {
-        if (ps->pid[i] == pid_a) {
-          compticksA = ps->compticks[i];
-        } else if (ps->pid[i] == pid_b) {
-          compticksB = ps->compticks[i];
+        if (ps.pid[i] == pid_a) {
+          compticksA = ps.compticks[i];
+        } else if (ps.pid[i] == pid_b) {
+          compticksB = ps.compticks[i];
         }
       } 
       printf(1, "%d %d\n", compticksA, compticksB);

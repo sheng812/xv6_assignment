@@ -121,9 +121,9 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
-int             setslice(int pid, int slice);
-int             getslice(int pid);
-int             fork2(int slice);
+int             setslice(int, int);
+int             getslice(int);
+int             fork2(int);
 int             getpinfo(struct pstat *);
 
 // swtch.S

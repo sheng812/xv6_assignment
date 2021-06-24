@@ -49,7 +49,9 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-  uint sleepat;                // The process sleep at ticks = sleepat
+  // uint sleepat;                // The process sleep at ticks = sleepat
+  // uint schedat;                // The process schedat from RUNNABLE to RUNNING
+  uint tick;                   // The ticks already scheduled
   int slice;                   // Time-slice
   int compticks;               // Time compensation
   int schedticks;              // total number of timer ticks this process has been scheduled

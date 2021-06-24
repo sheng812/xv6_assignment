@@ -208,6 +208,7 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->slice = 1;
+  p->tick = 0;
   p->compticks = 0;
   p->schedticks = 0;
   p->sleepticks = 0;
@@ -354,6 +355,7 @@ scheduler(void)
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
+  int i;
   // struct Node *pl;
   
   for(;;){
@@ -364,11 +366,29 @@ scheduler(void)
     acquire(&ptable.lock);
     // for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     // used linked list plist
-    for (int i = 0; i < plist.size; i++) {
+    i = 0;
+    while (i < plist.size) {
       p = plist.prs[i];
       if(p->state != RUNNABLE) {
+        i++;
         continue;
+      } else {
+        // acquire(&tickslock);
+        if (p->tick == 0) {
+          p->schedticks++;
+          p->switches++;
+          p->tick++;
+        } else if (p->tick < p->slice + p->compticks) {
+          p->tick++;
+          p->schedticks++;
+        } else {
+          p->tick = 0;
+          i++;
+          continue;
+        }
+        // release(&tickslock);
       }
+      
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -599,6 +619,7 @@ fork2(int slice)
   np->parent = curproc;
   *np->tf = *curproc->tf;
   np->slice = slice;
+  np->tick = 0;
   np->compticks = 0;
   np->schedticks = 0;
   np->sleepticks = 0;
@@ -628,6 +649,9 @@ fork2(int slice)
 int
 getpinfo(struct pstat *ps)
 {
+  if (ps == UNUSED) {
+    return -1;
+  }
   int i;
   acquire(&ptable.lock);
   for(i = 0; i < NPROC; i++){

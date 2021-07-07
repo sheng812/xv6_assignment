@@ -67,6 +67,12 @@ sys_sleep(void)
     return -1;
   acquire(&tickslock);
   ticks0 = ticks;
+  myproc()->sleepat = ticks0;
+  myproc()->sleepfor = n;
+  myproc()->tick = 0;
+  myproc()->compensation = n;
+  myproc()->sleepticks += n;
+  // cprintf("%d, %d\n",myproc()->pid, myproc()->compensation);
   while(ticks - ticks0 < n){
     if(myproc()->killed){
       release(&tickslock);

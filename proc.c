@@ -14,7 +14,7 @@ struct list {
   struct proc* prs[NPROC];
 }plist;
 
-struct Node* head;
+// struct Node* head;
 // struct Node* tail;
 // struct Node nodes[NPROC];
 
@@ -209,6 +209,9 @@ userinit(void)
 
   p->slice = 1;
   p->tick = 0;
+  p->compensation = 0;
+  p->sleepat = 0;
+  p->sleepfor = 0;
   p->compticks = 0;
   p->schedticks = 0;
   p->sleepticks = 0;
@@ -369,26 +372,28 @@ scheduler(void)
     i = 0;
     while (i < plist.size) {
       p = plist.prs[i];
-      if(p->state != RUNNABLE) {
+      if(p->state != RUNNABLE && p->state != RUNNING) {
         i++;
         continue;
       } else {
         // acquire(&tickslock);
         if (p->tick == 0) {
-          p->schedticks++;
           p->switches++;
-          p->tick++;
-        } else if (p->tick < p->slice + p->compticks) {
-          p->tick++;
-          p->schedticks++;
+        } else if (p->tick < p->slice + p->compensation) {
+          if (p->tick >= p->slice) {
+            // cprintf("%d, %d, %d\n",p->slice, p->tick, p->compensation);
+            p->compticks++;
+          }
         } else {
           p->tick = 0;
+          p->compensation = 0;
           i++;
           continue;
         }
         // release(&tickslock);
       }
-      
+      p->tick++;
+      p->schedticks++;
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -511,9 +516,22 @@ wakeup1(void *chan)
 {
   struct proc *p;
 
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
-      p->state = RUNNABLE;
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    if(p->state == SLEEPING && p->chan == chan){
+      if (p->chan == &ticks) {
+        // acquire(&tickslock);
+        if (ticks < p->sleepat + p->sleepfor) {
+          // release(&tickslock);
+          continue;
+        } else {
+          p->state = RUNNABLE;
+        }
+        // release(&tickslock);
+      } else {
+        p->state = RUNNABLE;
+      } 
+    }
+  }
 }
 
 // Wake up all processes sleeping on chan.
@@ -560,13 +578,7 @@ setslice(int pid, int slice)
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == pid){
-      int tmpslice = p->slice;
       p->slice = slice;
-      // Wake process from sleep if necessary.
-      if(p->state == RUNNING && p->slice < tmpslice){
-        p->state = RUNNABLE;
-        sched();
-      }
       release(&ptable.lock);
       return 0;
     }
@@ -620,6 +632,9 @@ fork2(int slice)
   *np->tf = *curproc->tf;
   np->slice = slice;
   np->tick = 0;
+  np->compensation = 0;
+  np->sleepat = 0;
+  np->sleepfor = 0;
   np->compticks = 0;
   np->schedticks = 0;
   np->sleepticks = 0;
@@ -653,21 +668,23 @@ getpinfo(struct pstat *ps)
     return -1;
   }
   int i;
-  acquire(&ptable.lock);
+  // acquire(&ptable.lock);
   for(i = 0; i < NPROC; i++){
     if (ptable.proc[i].state == UNUSED) {
       ps->inuse[i] = 0;
     } else {
       ps->inuse[i] = 1;
-      ps->pid[i] = ptable.proc[i].pid;
-      ps->timeslice[i] = ptable.proc[i].slice;
-      ps->compticks[i] = ptable.proc[i].compticks;
-      ps->schedticks[i] = ptable.proc[i].schedticks;
-      ps->sleepticks[i] = ptable.proc[i].sleepticks;
-      ps->switches[i] = ptable.proc[i].switches;
     }
+    ps->pid[i] = ptable.proc[i].pid;
+    ps->timeslice[i] = ptable.proc[i].slice;
+    ps->compticks[i] = ptable.proc[i].compticks;
+    ps->schedticks[i] = ptable.proc[i].schedticks;
+    ps->sleepticks[i] = ptable.proc[i].sleepticks;
+    ps->switches[i] = ptable.proc[i].switches;
   }
-  release(&ptable.lock);
+  // ps->compticks[4] = 5;
+  // ps->pid[4] = 4;
+  // release(&ptable.lock);
   return 0;
 }
 
